@@ -27,6 +27,12 @@ pub enum SorochargeError {
     /// The entry's own `signature_expiration_ledger` is later than the
     /// caller's `expected.valid_until_ledger` — it isn't expired, but it is
     /// valid for longer than the caller said it would accept.
+    ///
+    /// Returned from exactly two places, both for exactly this condition
+    /// (`signature_expiration_ledger > expected.valid_until_ledger`), and
+    /// each only after [`ExpiredEntry`](Self::ExpiredEntry) has been ruled
+    /// out: [`verify_entry`](crate::verify_entry) and
+    /// [`verify_delegated_threshold`](crate::verify_delegated_threshold).
     ExpirationExceedsAllowance {
         signature_expiration_ledger: u32,
         allowed_until_ledger: u32,
@@ -34,6 +40,22 @@ pub enum SorochargeError {
     /// The entry's invocation is not a SEP-41 `transfer(from, to, amount)`
     /// call on a single contract, so there is nothing meaningful to compare
     /// its asset/payer/amount/recipient against.
+    ///
+    /// Returned only by [`verify_entry`](crate::verify_entry), when the
+    /// entry's `root_invocation` is any of:
+    ///
+    /// - a node with sub-invocations, which would authorize calls beyond
+    ///   the single transfer (so it is no longer "a single contract" call);
+    /// - not a contract call at all (e.g. a `CreateContractHostFn`);
+    /// - a contract call to a function other than exactly `transfer`;
+    /// - a `transfer` call whose arguments are not exactly
+    ///   `(Address, Address, I128)`.
+    ///
+    /// Every one of these is a property of the entry itself. Internal
+    /// failures (e.g. a bug in this crate) are never reported through this
+    /// variant. Transaction-level shape problems, such as a wrong operation
+    /// count, belong to the x402/MPP adapters' own
+    /// `UnexpectedTransactionShape` errors, not to this variant.
     UnexpectedInvocationShape,
     /// The entry's asset contract does not match `ChargeParams::asset_contract`.
     AssetMismatch,
